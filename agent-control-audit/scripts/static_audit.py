@@ -14,9 +14,19 @@ import ast
 import hashlib
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_DIR = SCRIPT_DIR.parent
+ENGINE_DIR = SKILL_DIR / "engine"
+REGIMES_DIR = SKILL_DIR / "regimes"
+DOMAIN_EXTENSIONS_DIR = SKILL_DIR.parent / "domain_extensions"
+sys.path.insert(0, str(ENGINE_DIR))
+
+import schema_validate  # noqa: E402
 
 
 TEXT_EXTENSIONS = {
@@ -33,119 +43,81 @@ TEXT_EXTENSIONS = {
     ".txt",
 }
 
-CONTROL_NAMES = {
-    "C001": "Input Intent Policy",
-    "C002": "Output Recommendation Validation",
-    "C003": "Tool Authorization",
-    "C004": "Tool Argument Validation",
-    "C005": "Human Approval Gate",
-    "C006": "Transaction Limits And Kill Switch",
-    "C007": "Retrieval Scope Control",
-    "C008": "Grounding Validation",
-    "C009": "Data Minimization",
-    "C010": "Sensitive Data Redaction",
-    "C011": "Audit Logging",
-    "C012": "Handoff Authority Boundary",
-    "C013": "Handoff Input Filter",
-    "C014": "Handoff Provenance",
-    "C015": "Runtime Monitoring Boundary",
-    "C016": "Reproducibility Boundary",
-    "C017": "Prompt Injection And Jailbreak Resistance",
-    "C018": "Toxicity And Abuse Content Safety",
-    "C019": "Rate Limit And Cost Boundary",
-    "C020": "Timeout Fallback And Degradation",
-    "C021": "Operational Observability And Incident Response",
-    "C022": "Eval Harness And Regression Gate",
-    "C023": "Model Inventory And Ownership",
-    "C024": "Intended Use And Limitations",
-    "C025": "Independent Validation And Effective Challenge",
-    "C026": "Data Lineage And Quality",
-    "C027": "Drift And Outcome Monitoring",
-    "C028": "Benchmarking And Backtesting",
-    "C029": "Fairness And Bias Testing",
-    "C030": "Explainability And Reason Codes",
-    "C031": "Change Management And Release Approval",
-    "C032": "Third-Party And Vendor Model Risk",
-    "C033": "Access Control And Segregation Of Duties",
-    "C034": "Evidence Retention And Legal Hold",
-    "C035": "Business Continuity Rollback And Decommissioning",
-    "C036": "Model Governance Reporting",
-}
+CONTROL_HEADING_PATTERN = re.compile(r"^### (C\d{3}) (.+)$", re.MULTILINE)
 
-REQUIREMENTS = {
-    "FIN-001": {
-        "text": "Financial side effects require authorization, argument validation, approval, limits, and audit logging.",
-        "controls": ["C003", "C004", "C005", "C006", "C011"],
-        "severity": "blocker",
-    },
-    "FIN-002": {
-        "text": "Financial recommendation or regulated output requires request and output controls.",
-        "controls": ["C001", "C002"],
-        "severity": "high",
-    },
-    "FIN-003": {
-        "text": "Customer financial data requires authorization, minimization, redaction, and audit logs.",
-        "controls": ["C003", "C009", "C010", "C011"],
-        "severity": "high",
-    },
-    "FIN-004": {
-        "text": "Financial RAG requires retrieval scope and grounding validation.",
-        "controls": ["C007", "C008"],
-        "severity": "high",
-    },
-    "FIN-005": {
-        "text": "Multi-agent financial delegation requires authority, input filtering, and provenance.",
-        "controls": ["C012", "C013", "C014"],
-        "severity": "high",
-    },
-    "FIN-006": {
-        "text": "Safety claims and eval-dependent controls require reproducible versions, seeds, and datasets.",
-        "controls": ["C016"],
-        "severity": "medium",
-    },
-    "FIN-007": {
-        "text": "External or retrieval/tool-connected financial agents require prompt-injection and jailbreak resistance.",
-        "controls": ["C017"],
-        "severity": "high",
-    },
-    "FIN-008": {
-        "text": "Customer-facing financial agents require toxicity and abusive-content safety controls.",
-        "controls": ["C018"],
-        "severity": "medium",
-    },
-    "FIN-009": {
-        "text": "Production-facing financial agents require rate/cost limits, timeout/fallback behavior, and operational observability.",
-        "controls": ["C019", "C020", "C021"],
-        "severity": "medium",
-    },
-    "FIN-010": {
-        "text": "High-risk financial agents require eval harnesses and regression gates for jailbreak, data leakage, grounding, and tool misuse.",
-        "controls": ["C022"],
-        "severity": "high",
-    },
-    "FIN-011": {
-        "text": "High-risk financial agents require model inventory, ownership, intended-use boundaries, limitations, and governance reporting.",
-        "controls": ["C023", "C024", "C036"],
-        "severity": "high",
-    },
-    "FIN-012": {
-        "text": "High-risk financial agents require independent validation, ongoing drift/outcome monitoring, and benchmark or backtesting evidence.",
-        "controls": ["C025", "C027", "C028"],
-        "severity": "high",
-    },
-    "FIN-013": {
-        "text": "Financial agents using customer, transaction, retrieval, eligibility, prioritization, or decision-support data require data lineage, fairness/bias testing, and explainability/reason codes.",
-        "controls": ["C026", "C029", "C030"],
-        "severity": "high",
-    },
-    "FIN-014": {
-        "text": "Production-facing financial agents require change governance, vendor risk controls, access segregation, evidence retention, rollback, continuity, and decommissioning.",
-        "controls": ["C031", "C032", "C033", "C034", "C035"],
-        "severity": "medium",
-    },
-}
+
+def load_control_names(control_catalog_path: Path) -> dict[str, str]:
+    text = control_catalog_path.read_text(encoding="utf-8")
+    return {match.group(1): match.group(2).strip() for match in CONTROL_HEADING_PATTERN.finditer(text)}
+
+
+def reshape_requirements(data: dict[str, Any], control_ids: set[str], source_label: str) -> dict[str, dict[str, Any]]:
+    """Validate a requirement_id -> requirement mapping with engine/schema_validate.py
+    and reshape it into the {"text", "controls", "severity", "source"} form this
+    module uses internally. A malformed regime or domain-overlay file fails loud
+    here rather than crashing opaquely downstream or silently omitting requirements."""
+    errors = schema_validate.validate_regime_file(data, control_ids, source_label=source_label)
+    if errors:
+        raise ValueError(f"invalid regime file {source_label}:\n  " + "\n  ".join(errors))
+    return {
+        requirement_id: {
+            "text": entry["requirement_text"],
+            "controls": entry["requires_controls"],
+            "severity": entry["severity_floor"],
+            "source": entry["source"],
+        }
+        for requirement_id, entry in data.items()
+    }
+
+
+def load_requirements(regime_path: Path, control_ids: set[str]) -> dict[str, dict[str, Any]]:
+    """Load a flat requirement_id -> requirement mapping (the domain-overlay shape)."""
+    data = json.loads(regime_path.read_text(encoding="utf-8"))
+    return reshape_requirements(data, control_ids, str(regime_path))
+
+
+def load_base_regime(regime_path: Path, control_ids: set[str]) -> dict[str, dict[str, Any]]:
+    """Load the author-approved base regime file. Unlike a domain overlay, this file
+    must carry an explicit {"author_approved": true, "requirements": {...}} envelope.
+    SKILL.md's Fail-Loud Gates require stopping when this regime is missing, empty,
+    or not author-approved — this is that check enforced by the runtime loader
+    itself, not just prose the LLM has to remember to check."""
+    payload = json.loads(regime_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or "requirements" not in payload:
+        raise ValueError(f"{regime_path}: base regime file must be an object with an 'author_approved' flag and a 'requirements' object")
+    if payload.get("author_approved") is not True:
+        raise ValueError(f"{regime_path}: author_approved must be true; this regime is not cleared for use")
+    return reshape_requirements(payload["requirements"], control_ids, str(regime_path))
+
+
+CONTROL_NAMES = load_control_names(ENGINE_DIR / "control_catalog.md")
+CONTROL_IDS = set(CONTROL_NAMES)
+REQUIREMENTS = load_base_regime(REGIMES_DIR / "financial.json", CONTROL_IDS)
 
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "blocker": 4}
+
+
+def load_domain_overlay(domain: str) -> tuple[dict[str, dict[str, Any]], Path | None]:
+    """Resolve domain_extensions/<domain>/regime_overlay.json if present. Returns
+    (overlay_requirements, path_or_None). Overlay requirement ids apply
+    unconditionally when this domain is selected — the domain selection itself is
+    the applicability condition, unlike the base financial regime's harm-surface
+    conditions in derive_required(). An overlay must not reuse a base regime
+    requirement id: that would silently replace (not add to) a base requirement's
+    controls/severity/provenance wherever compare_controls and derive_required look
+    it up by id, which could weaken an existing blocker-level requirement without
+    anyone noticing."""
+    overlay_path = DOMAIN_EXTENSIONS_DIR / domain / "regime_overlay.json"
+    if not overlay_path.exists():
+        return {}, None
+    overlay_requirements = load_requirements(overlay_path, CONTROL_IDS)
+    collisions = sorted(set(overlay_requirements) & set(REQUIREMENTS))
+    if collisions:
+        raise ValueError(
+            f"{overlay_path}: overlay requirement ids collide with base regime ids and would silently "
+            f"override them: {collisions}. Domain overlays must use their own id prefix (e.g. FIN-AML-NNN)."
+        )
+    return overlay_requirements, overlay_path
 
 
 @dataclass
@@ -844,7 +816,7 @@ def infer_profile(files: list[SourceFile], discovery: dict[str, Any]) -> dict[st
     }
 
 
-def derive_required(profile: dict[str, Any]) -> dict[str, list[str]]:
+def derive_required(profile: dict[str, Any], requirements_catalog: dict[str, dict[str, Any]] = REQUIREMENTS) -> dict[str, list[str]]:
     requirements: dict[str, list[str]] = {}
     surfaces = set(profile["harm_surfaces"])
     architecture = set(profile["architecture"])
@@ -856,39 +828,49 @@ def derive_required(profile: dict[str, Any]) -> dict[str, list[str]]:
     )
 
     if "money_movement" in surfaces:
-        requirements["FIN-001"] = REQUIREMENTS["FIN-001"]["controls"]
+        requirements["FIN-001"] = requirements_catalog["FIN-001"]["controls"]
     if {"financial_recommendation", "credit_or_eligibility", "regulated_customer_communication"} & surfaces:
-        requirements["FIN-002"] = REQUIREMENTS["FIN-002"]["controls"]
+        requirements["FIN-002"] = requirements_catalog["FIN-002"]["controls"]
     if "customer_financial_data" in surfaces:
-        requirements["FIN-003"] = REQUIREMENTS["FIN-003"]["controls"]
+        requirements["FIN-003"] = requirements_catalog["FIN-003"]["controls"]
     if "rag_agent" in architecture or "retrieval_grounded_financial_answer" in surfaces:
-        requirements["FIN-004"] = REQUIREMENTS["FIN-004"]["controls"]
+        requirements["FIN-004"] = requirements_catalog["FIN-004"]["controls"]
     if "multi_agent_handoff" in architecture or "agent_as_tool" in architecture:
-        requirements["FIN-005"] = REQUIREMENTS["FIN-005"]["controls"]
+        requirements["FIN-005"] = requirements_catalog["FIN-005"]["controls"]
     if profile.get("has_safety_claims_or_evals"):
-        requirements["FIN-006"] = REQUIREMENTS["FIN-006"]["controls"]
+        requirements["FIN-006"] = requirements_catalog["FIN-006"]["controls"]
     if profile.get("external_or_customer_facing") or {"rag_agent", "tool_agent"} & architecture:
-        requirements["FIN-007"] = REQUIREMENTS["FIN-007"]["controls"]
+        requirements["FIN-007"] = requirements_catalog["FIN-007"]["controls"]
     if profile.get("external_or_customer_facing"):
-        requirements["FIN-008"] = REQUIREMENTS["FIN-008"]["controls"]
-        requirements["FIN-009"] = REQUIREMENTS["FIN-009"]["controls"]
+        requirements["FIN-008"] = requirements_catalog["FIN-008"]["controls"]
+        requirements["FIN-009"] = requirements_catalog["FIN-009"]["controls"]
     if surfaces or {"rag_agent", "tool_agent", "multi_agent_handoff"} & architecture:
-        requirements["FIN-010"] = REQUIREMENTS["FIN-010"]["controls"]
+        requirements["FIN-010"] = requirements_catalog["FIN-010"]["controls"]
     if surfaces or high_risk_architecture or customer_or_external:
-        requirements["FIN-011"] = REQUIREMENTS["FIN-011"]["controls"]
+        requirements["FIN-011"] = requirements_catalog["FIN-011"]["controls"]
     if profile.get("has_safety_claims_or_evals") or data_driven or high_risk_architecture:
-        requirements["FIN-012"] = REQUIREMENTS["FIN-012"]["controls"]
+        requirements["FIN-012"] = requirements_catalog["FIN-012"]["controls"]
     if data_driven:
-        requirements["FIN-013"] = REQUIREMENTS["FIN-013"]["controls"]
+        requirements["FIN-013"] = requirements_catalog["FIN-013"]["controls"]
     if customer_or_external or high_risk_architecture:
-        requirements["FIN-014"] = REQUIREMENTS["FIN-014"]["controls"]
+        requirements["FIN-014"] = requirements_catalog["FIN-014"]["controls"]
     return requirements
 
 
-def max_severity(requirement_ids: list[str], status: str) -> str:
+def merge_domain_overlay(required: dict[str, list[str]], overlay_requirements: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
+    """Add domain-overlay requirement ids into a derive_required() result. Overlay
+    requirements apply unconditionally once merged — the caller only invokes this
+    when a --domain was selected and its regime_overlay.json was found and validated."""
+    merged = dict(required)
+    for requirement_id, entry in overlay_requirements.items():
+        merged[requirement_id] = entry["controls"]
+    return merged
+
+
+def max_severity(requirement_ids: list[str], status: str, requirements_catalog: dict[str, dict[str, Any]] = REQUIREMENTS) -> str:
     severity = "low"
     for requirement_id in requirement_ids:
-        candidate = REQUIREMENTS[requirement_id]["severity"]
+        candidate = requirements_catalog[requirement_id]["severity"]
         if SEVERITY_ORDER[candidate] > SEVERITY_ORDER[severity]:
             severity = candidate
     if status == "weak" and severity == "blocker":
@@ -905,7 +887,12 @@ def canonical_hash(record: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def compare_controls(root: Path, required: dict[str, list[str]], present: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def compare_controls(
+    root: Path,
+    required: dict[str, list[str]],
+    present: list[dict[str, Any]],
+    requirements_catalog: dict[str, dict[str, Any]] = REQUIREMENTS,
+) -> list[dict[str, Any]]:
     present_by_id = {control["control_id"]: control for control in present}
     control_to_requirements: dict[str, list[str]] = {}
     for requirement_id, control_ids in required.items():
@@ -942,12 +929,12 @@ def compare_controls(root: Path, required: dict[str, list[str]], present: list[d
             },
             "requirement": {
                 "id": primary_requirement,
-                "text": REQUIREMENTS[primary_requirement]["text"],
-                "source": "author_policy",
+                "text": requirements_catalog[primary_requirement]["text"],
+                "source": requirements_catalog[primary_requirement].get("source", "author_policy"),
             },
             "all_requirement_ids": requirement_ids,
             "status": status,
-            "severity": max_severity(requirement_ids, status),
+            "severity": max_severity(requirement_ids, status, requirements_catalog),
             "location": location,
             "detection_method": "static_audit_py",
             "evidence": evidence,
@@ -1031,10 +1018,18 @@ def verdict_for(findings: list[dict[str, Any]]) -> tuple[str, str]:
     return "low", "ship"
 
 
-def audit(root: Path) -> dict[str, Any]:
+def audit(root: Path, domain: str | None = None) -> dict[str, Any]:
     root = root.resolve()
     files = read_files(root)
     route = detect_framework(files)
+    domain_overlay_requirements, domain_overlay_path = load_domain_overlay(domain) if domain else ({}, None)
+    domain_info = {
+        "domain": domain,
+        "domain_overlay_loaded": domain_overlay_path is not None,
+        "domain_overlay_path": str(domain_overlay_path) if domain_overlay_path else None,
+        "domain_overlay_requirement_ids": sorted(domain_overlay_requirements),
+        "domain_overlay_catalog": domain_overlay_requirements,
+    }
     if route["status"] != "implemented":
         risk_tier = "critical" if route["status"] in {"undetermined", "not_implemented", "no_agent_found"} else "low"
         decision = "block" if route["status"] in {"undetermined", "not_implemented", "no_agent_found"} else "ship"
@@ -1050,12 +1045,16 @@ def audit(root: Path) -> dict[str, Any]:
             "required_controls": {},
             "findings": [],
             "coverage_statement": coverage_statement(route["status"], route["framework"]),
+            **domain_info,
         }
 
     discovery = discover_source_controls(files, route["framework"])
     profile = infer_profile(files, discovery)
-    required = derive_required(profile)
-    findings = compare_controls(root, required, discovery["controls_present"])
+    requirements_catalog = {**REQUIREMENTS, **domain_overlay_requirements}
+    required = derive_required(profile, requirements_catalog)
+    if domain_overlay_requirements:
+        required = merge_domain_overlay(required, domain_overlay_requirements)
+    findings = compare_controls(root, required, discovery["controls_present"], requirements_catalog)
     risk_tier, decision = verdict_for(findings)
     return {
         "target": str(root),
@@ -1072,6 +1071,7 @@ def audit(root: Path) -> dict[str, Any]:
         "findings": findings,
         "coverage_statement": coverage_statement(route["status"], route["framework"]),
         "blind_spots": discovery["blind_spots"],
+        **domain_info,
     }
 
 
@@ -1100,9 +1100,14 @@ def main() -> int:
     parser.add_argument("target", type=Path, help="Agent repository or fixture path to audit")
     parser.add_argument("--out", type=Path, help="Optional path for full audit JSON output")
     parser.add_argument("--jsonl", type=Path, help="Optional path for finding records as JSON Lines")
+    parser.add_argument(
+        "--domain",
+        help="Domain pack name under domain_extensions/<domain>/. When its regime_overlay.json exists, "
+        "its requirements are validated and merged into the required-control set for this run.",
+    )
     args = parser.parse_args()
 
-    result = audit(args.target)
+    result = audit(args.target, domain=args.domain)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

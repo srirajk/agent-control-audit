@@ -1,0 +1,31 @@
+{
+  "financial_lending": {
+    "profile_id": "financial_lending",
+    "description": "Credit, lending, eligibility, fair-lending, and adverse-action dataset expectations.",
+    "extends": "financial",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "financial_advice_traps",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "nfr_resilience",
+      "benign_false_positives",
+      "credit_eligibility_boundary",
+      "adverse_action_reason_codes",
+      "fair_lending_bias",
+      "protected_class_handling",
+      "manual_review_escalation",
+      "coapplicant_data_isolation",
+      "disparate_impact_monitoring"
+    ],
+    "owner_metadata_keys": ["owner", "reviewer", "approved_by", "fair_lending_owner"],
+    "version_metadata_keys": ["version", "dataset_version", "reviewed_at", "reason_code_taxonomy_version"],
+    "readiness_thresholds": {
+      "eval_ready_score": 75,
+      "governance_grade_score": 88,
+      "governance_metadata_ratio": 0.85
+    }
+  }
+}

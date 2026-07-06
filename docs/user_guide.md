@@ -100,8 +100,162 @@ The proposed golden dataset files in `05_dataset/proposed/` are only created whe
 | 5. Golden dataset readiness | Check whether existing cases are usable, or propose seed cases when none exist | JSONL, JSON, CSV, XLSX, or permission to draft seed cases | `05_dataset/readiness/`, `05_dataset/normalized/`, or `05_dataset/proposed/` | Approve dataset, fill gaps, or stop |
 | 6. DeepEval suite generation | Generate user-facing eval tests | Approved normalized dataset | `06_evals/deepeval/deepeval_suite.py` | Confirm eval coverage and thresholds |
 | 7. Dynamic invocation readiness | Decide how to call the live agent | HTTP/MCP/SDK/CLI path and local secrets | Invocation plan | Confirm runtime access is safe |
-| 8. Dynamic eval run | Execute golden cases against the agent | Working invocation path | `06_evals/results/eval_summary.json`, optional result JSONL | Decide pass/fail and residual risk |
+| 8. Dynamic eval run | Execute golden cases against the agent | Working invocation path | `06_evals/results/eval_summary.md`, `eval_summary.json`, optional result JSONL | Decide pass/fail and residual risk |
 | 9. Final report | Package the evidence for governance | Audit, dataset, eval artifacts | `07_reports/assurance_report.md`, `.xlsx`, `.docx` | Accept, remediate, or hold release |
+
+## Quick Demo: Phase-By-Phase HTTP Run
+
+Use this path when you want to verify the skill one phase at a time against the local Google ADK 1.x AML demo.
+
+Prerequisites:
+
+- The demo agent is running at `http://127.0.0.1:9124`.
+- `http://127.0.0.1:9124/health` returns `{"status":"ok"}`.
+- `http://127.0.0.1:9124/invoke` accepts the assurance invocation contract.
+- The target repo is `examples/google_adk_aml_openai`.
+- The starter AML golden dataset is `agent-control-audit/evals/datasets/aml_investigation_controls.jsonl`.
+
+To start the demo server from the repo root:
+
+```bash
+AGENT_ASSURANCE_LIVE_ADK=1 \
+AGENT_ASSURANCE_DOTENV=examples/google_adk_aml_openai/.env \
+.venv/bin/uvicorn server:app --app-dir examples/google_adk_aml_openai --host 127.0.0.1 --port 9124
+```
+
+Do not paste API keys into prompts. The running demo server owns its local `.env`; the audit should receive only the HTTP URL.
+
+Recommended output folder:
+
+```text
+outputs/google_adk_aml_openai_http/<YYYY-MM-DD-HHMM>/
+```
+
+### Phase 1: Intake And Health
+
+Prompt:
+
+```text
+Use agent-control-audit for phase 1 only.
+Target repo: examples/google_adk_aml_openai.
+Quality profile: financial_aml.
+Output folder: outputs/google_adk_aml_openai_http/<YYYY-MM-DD-HHMM>.
+Live agent URL: http://127.0.0.1:9124.
+Verify /health only, create intake artifacts, and stop before static audit.
+Do not edit the source code.
+```
+
+Expected artifacts:
+
+- `ARTIFACT_INDEX.md`
+- `_run_manifest.json`
+- `00_intake/scope.md`
+- `00_intake/domain_context.md`
+- `00_intake/governance_expectations.md`
+- `00_intake/invocation_readiness.md`
+
+Success signal:
+
+- The run confirms the endpoint is reachable, or clearly marks dynamic proof as pending if local HTTP access is blocked.
+
+### Phase 2: Observation And Static Audit
+
+Prompt:
+
+```text
+Continue the same agent-control-audit run for phase 2 only.
+Create the observation, static audit, baseline-vs-domain comparison, gap matrix, and change plan.
+Use financial_aml.
+Do not run dynamic evals yet.
+Do not edit the source code.
+Stop after the change plan.
+```
+
+Expected artifacts:
+
+- `01_observation/observation.md`
+- `02_static_audit/static_audit.json`
+- `02_static_audit/findings.jsonl`
+- `02_static_audit/static_audit.md`
+- `03_gap_matrix/gap_matrix.md`
+- `03_gap_matrix/gap_matrix.xlsx`
+- `04_change_plan/change_plan.md`
+
+Success signal:
+
+- The user can read what the agent appears to do, what controls exist, what is missing, and what the skill would change before any code is touched.
+
+### Phase 3: Golden Dataset And DeepEval Export
+
+Prompt:
+
+```text
+Continue the same agent-control-audit run for phase 3 only.
+Use agent-control-audit/evals/datasets/aml_investigation_controls.jsonl as the approved starter golden dataset.
+Validate and normalize the dataset.
+Generate the DeepEval suite.
+Do not call the live endpoint yet.
+Stop after DeepEval generation.
+```
+
+Expected artifacts:
+
+- `05_dataset/readiness/dataset_readiness.md`
+- `05_dataset/normalized/normalized_dataset.jsonl`
+- `05_dataset/normalized/normalized_dataset.md`
+- `06_evals/deepeval/deepeval_suite.py`
+- `06_evals/deepeval/deepeval_suite.md`
+
+Success signal:
+
+- The dataset is marked usable for this run, or the missing fields are explained in human language.
+
+### Phase 4: Dynamic HTTP Eval
+
+Prompt:
+
+```text
+Continue the same agent-control-audit run for phase 4 only.
+Run the normalized AML golden dataset against http://127.0.0.1:9124/invoke.
+Use DeepEval-first evaluation with deterministic hard gates.
+Capture prompt-injection, data-leakage, approval-gate, evidence, and final-decision behavior.
+Generate machine-readable results and a human-readable Markdown summary.
+Stop before final packaging.
+```
+
+Expected artifacts:
+
+- `06_evals/results/eval_summary.json`
+- `06_evals/results/eval_summary.md`
+- `06_evals/results/eval_results.jsonl`
+- `06_evals/results/runtime_transcripts.jsonl`, if transcripts are available
+
+Success signal:
+
+- The output shows pass/fail by golden case and explains failures as release blockers, accepted risks, or test-data issues.
+
+### Phase 5: Final Report And Evidence
+
+Prompt:
+
+```text
+Continue the same agent-control-audit run for phase 5 only.
+Create the final assurance report and evidence manifest.
+Generate Markdown first, and Excel or DOCX if available.
+Do not modify the target agent source.
+```
+
+Expected artifacts:
+
+- `07_reports/assurance_report.md`
+- `07_reports/assurance_report.xlsx`, if requested and supported
+- `07_reports/assurance_report.docx`, if requested and supported
+- `09_evidence/evidence_manifest.json`
+- `09_evidence/hashes.jsonl`
+
+Success signal:
+
+- A governance reviewer can understand the agent, the dataset, the evals, the dynamic proof, remaining gaps, and residual risk without reading raw JSON.
 
 ## Stage 0: Intake And Run Setup
 
@@ -563,9 +717,10 @@ Result JSON should capture:
 
 Artifact outcome:
 
+- `06_evals/results/eval_summary.md`: human-readable run summary.
 - `06_evals/results/eval_summary.json`: machine-readable eval summary.
 - Optional `06_evals/results/eval_results.jsonl`: per-case results.
-- Human summary in Markdown or Excel.
+- Optional Excel summary when requested.
 
 Human decision:
 

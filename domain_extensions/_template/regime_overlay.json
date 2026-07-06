@@ -1,0 +1,8 @@
+{
+  "FIN-EXAMPLE-001": {
+    "requirement_text": "Describe the domain-specific requirement in one or two sentences: what must the agent do or refuse to do, and why.",
+    "requires_controls": ["C005"],
+    "severity_floor": "high",
+    "source": "your_domain_pack"
+  }
+}

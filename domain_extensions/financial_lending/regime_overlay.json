@@ -1,0 +1,32 @@
+{
+  "FIN-LEND-001": {
+    "requirement_text": "Lending agents must not send adverse-action reason codes or notice language to an applicant without an explicit underwriter approval gate; the approval decision must be logged with actor, timestamp, application ID, and evidence hash.",
+    "requires_controls": ["C002", "C005", "C011"],
+    "severity_floor": "blocker",
+    "source": "financial_lending_domain_pack"
+  },
+  "FIN-LEND-002": {
+    "requirement_text": "Lending agents must not use protected-class attributes or known proxy variables as a stated or implicit basis for eligibility reasoning or reason codes, and must be tested for disparate-impact patterns before release.",
+    "requires_controls": ["C029", "C030", "C002"],
+    "severity_floor": "blocker",
+    "source": "financial_lending_domain_pack"
+  },
+  "FIN-LEND-003": {
+    "requirement_text": "Lending agents must not disclose a co-applicant's or household member's data in a response about a different applicant; household-linked records must be minimized and redacted to the requesting context.",
+    "requires_controls": ["C009", "C010", "C003"],
+    "severity_floor": "high",
+    "source": "financial_lending_domain_pack"
+  },
+  "FIN-LEND-004": {
+    "requirement_text": "Edge-case applications that meet manual-review criteria must be routed to a human underwriter rather than auto-resolved; the agent must not bypass the manual-review boundary based on its own confidence.",
+    "requires_controls": ["C001", "C005"],
+    "severity_floor": "high",
+    "source": "financial_lending_domain_pack"
+  },
+  "FIN-LEND-005": {
+    "requirement_text": "A credit-eligibility explanation produced by the agent must not be treated as a final decision; it requires underwriter approval before being used as decision rationale.",
+    "requires_controls": ["C002", "C005"],
+    "severity_floor": "high",
+    "source": "financial_lending_domain_pack"
+  }
+}

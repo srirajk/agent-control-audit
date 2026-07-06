@@ -96,6 +96,31 @@ def gap_rows(audit: dict[str, Any]) -> list[dict[str, str]]:
     return rows
 
 
+def domain_extension_reference_text(audit: dict[str, Any], domain: str) -> str:
+    resolved_domain = audit.get("domain") or domain
+    if not resolved_domain:
+        return "# Domain Extension Reference\n\n- **Selected profile:** not specified\n- **Extension pack:** no domain was selected for this run."
+    if audit.get("domain_overlay_loaded"):
+        overlay_ids = ", ".join(audit.get("domain_overlay_requirement_ids") or []) or "none"
+        return (
+            f"# Domain Extension Reference\n\n"
+            f"- **Selected profile:** {resolved_domain}\n"
+            f"- **Extension pack:** loaded from `{audit.get('domain_overlay_path')}`\n"
+            f"- **Overlay requirements merged into required_controls:** {overlay_ids}\n\n"
+            "These requirements are schema-validated (agent-control-audit/engine/schema_validate.py) and merged by "
+            "scripts/static_audit.py before this run's required_controls, gap matrix, and dataset quality profile were produced — "
+            "see 03_gap_matrix/domain_overlay_diff.md for exactly what the domain pack changed versus a no-domain baseline."
+        )
+    return (
+        f"# Domain Extension Reference\n\n"
+        f"- **Selected profile:** {resolved_domain}\n"
+        f"- **Extension pack:** none found at `domain_extensions/{resolved_domain}/regime_overlay.json`\n\n"
+        f"No `regime_overlay.json` exists for this domain, so required_controls for this run come only from the base "
+        "financial regime (regimes/financial.json). Add domain_extensions/<domain>/regime_overlay.json (see "
+        "domain_extensions/_template/regime_overlay.json) to have domain-specific requirements merged in."
+    )
+
+
 def render_intake(run_dir: Path, audit: dict[str, Any], target: str, domain: str) -> None:
     profile = audit.get("profile") or {}
     write(
@@ -144,7 +169,7 @@ def render_intake(run_dir: Path, audit: dict[str, Any], target: str, domain: str
     )
     write(
         run_dir / "00_intake" / "domain_extension_reference.md",
-        f"# Domain Extension Reference\n\n- **Selected profile:** {domain or 'not specified'}\n- **Extension pack:** not supplied for this run\n\nIf a team supplies `domain_extensions/<domain>/`, the skill should reference it here and use it before finalizing observations, dataset requirements, gap analysis, or report language.",
+        domain_extension_reference_text(audit, domain),
     )
     write(
         run_dir / "00_intake" / "governance_expectations.md",
@@ -251,6 +276,66 @@ def render_gap_matrix(run_dir: Path, audit: dict[str, Any]) -> None:
     )
 
 
+def render_domain_overlay_diff(run_dir: Path, baseline_audit: dict[str, Any], domain_audit: dict[str, Any]) -> None:
+    """Proof artifact for the domain-extension model: run the same target with and
+    without --domain, and show exactly what the domain pack changed. This exists
+    because a domain pack that changes nothing observable is indistinguishable from
+    a domain pack that was never wired in — this file is the observable difference."""
+    baseline_required = set((baseline_audit.get("required_controls") or {}).keys())
+    domain_required = set((domain_audit.get("required_controls") or {}).keys())
+    only_in_domain = sorted(domain_required - baseline_required)
+    domain_name = domain_audit.get("domain") or "unknown"
+
+    # A requirement can be "new" while every control it names was already required by
+    # the baseline for a different reason (e.g. FIN-AML-002 requires C005, which FIN-001
+    # already required for money movement). Only controls absent from every baseline
+    # requirement are genuinely new coverage — don't call the rest "introduced".
+    baseline_controls: set[str] = set()
+    for controls in (baseline_audit.get("required_controls") or {}).values():
+        baseline_controls.update(controls)
+
+    genuinely_new_controls: set[str] = set()
+    for requirement_id in only_in_domain:
+        controls = domain_audit["required_controls"].get(requirement_id, [])
+        genuinely_new_controls.update(c for c in controls if c not in baseline_controls)
+
+    lines = [
+        "# Domain Overlay Diff",
+        "",
+        f"Same target audited twice: once with no domain selected, once with `--domain {domain_name}`. "
+        "This is the observable proof that selecting a domain changes the audit, not just the report narrative.",
+        "",
+        f"- **Baseline required requirement count:** {len(baseline_required)}",
+        f"- **With `{domain_name}` required requirement count:** {len(domain_required)}",
+        f"- **Requirements only present with the domain pack loaded:** {len(only_in_domain)}",
+        f"- **Controls genuinely new to the run (not already required by baseline):** {len(genuinely_new_controls)} "
+        f"({', '.join(sorted(genuinely_new_controls)) or 'none'})",
+        "",
+    ]
+    if not only_in_domain:
+        lines.append(
+            "No additional requirements were introduced by this domain pack. Either no `regime_overlay.json` exists "
+            f"for `{domain_name}`, or it is empty — check `domain_overlay_loaded` in the domain-scoped audit JSON."
+        )
+    else:
+        domain_overlay_catalog = domain_audit.get("domain_overlay_catalog") or {}
+        lines.extend(
+            [
+                "| Requirement | Controls Required By This Requirement | New Controls (Not Already Required By Baseline) | Severity Floor | Source |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for requirement_id in only_in_domain:
+            controls = domain_audit["required_controls"].get(requirement_id, [])
+            new_controls = [c for c in controls if c not in baseline_controls]
+            catalog_entry = domain_overlay_catalog.get(requirement_id, {})
+            severity = catalog_entry.get("severity", "see static_audit.json")
+            source = catalog_entry.get("source", "domain pack")
+            new_controls_cell = ", ".join(new_controls) if new_controls else "none — all already required by baseline"
+            lines.append(f"| {requirement_id} | {', '.join(controls)} | {new_controls_cell} | {severity} | {source} |")
+    write(run_dir / "03_gap_matrix" / "domain_overlay_diff.md", "\n".join(lines))
+
+
 def render_change_plan(run_dir: Path, audit: dict[str, Any]) -> None:
     findings = audit.get("findings") or []
     lines = [
@@ -349,15 +434,22 @@ def render_eval_summary(run_dir: Path, summary: dict[str, Any] | None, name: str
         f"- **Attack failure rate:** {summary.get('attack_failure_rate')}",
         f"- **Benign false positive rate:** {summary.get('benign_false_positive_rate')}",
         f"- **Dataset hash:** `{summary.get('dataset_hash')}`",
+        f"- **Passed on structured evidence only:** {summary.get('passed_on_structured_evidence_only')}",
+        f"- **Passed with text-fallback reliance:** {summary.get('passed_with_text_fallback_reliance')}",
+        "",
+        "\"Passed with text-fallback reliance\" means at least one substring/regex check contributed to the pass verdict "
+        "(see `assertion_limitations` in the eval results JSONL) — treat those passes as smoke-tested, not semantically proven.",
         "",
         "## Suites",
         "",
-        "| Suite | Passed | Failed | Total | Pass Rate | Failed IDs |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Suite | Passed | Failed | Total | Pass Rate | Structured-Only | Text-Fallback | Failed IDs |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for suite, row in sorted((summary.get("by_suite") or {}).items()):
         lines.append(
-            f"| {suite} | {row.get('passed')} | {row.get('failed')} | {row.get('total')} | {row.get('pass_rate')} | {', '.join(row.get('failed_ids') or [])} |"
+            f"| {suite} | {row.get('passed')} | {row.get('failed')} | {row.get('total')} | {row.get('pass_rate')} | "
+            f"{row.get('passed_on_structured_evidence_only')} | {row.get('passed_with_text_fallback_reliance')} | "
+            f"{', '.join(row.get('failed_ids') or [])} |"
         )
     write(run_dir / "06_evals" / "results" / f"{name}.md", "\n".join(lines))
 
@@ -396,6 +488,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Render human-readable stage artifacts for an assurance run.")
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--audit-json", type=Path, required=True)
+    parser.add_argument(
+        "--baseline-audit-json",
+        type=Path,
+        help="Optional static_audit.json from a run of the same target with no --domain. "
+        "When provided alongside --audit-json for a domain-scoped run, renders "
+        "03_gap_matrix/domain_overlay_diff.md showing what the domain pack changed.",
+    )
     parser.add_argument("--dataset-report", type=Path)
     parser.add_argument("--eval-summary", type=Path)
     parser.add_argument("--http-eval-summary", type=Path)
@@ -415,6 +514,9 @@ def main() -> int:
     render_observation(run_dir, audit)
     render_static_summary(run_dir, audit)
     render_gap_matrix(run_dir, audit)
+    baseline_audit = load_json(args.baseline_audit_json)
+    if baseline_audit is not None:
+        render_domain_overlay_diff(run_dir, baseline_audit, audit)
     render_change_plan(run_dir, audit)
     render_dataset_readiness(run_dir, dataset_report)
     render_eval_summary(run_dir, eval_summary, "eval_summary")

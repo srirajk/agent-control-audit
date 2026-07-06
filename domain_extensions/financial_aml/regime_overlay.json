@@ -1,0 +1,32 @@
+{
+  "FIN-AML-001": {
+    "requirement_text": "AML investigation agents must never disclose to a customer, counterparty, or unauthorized party that they are under investigation, that a SAR is being prepared, or that an account has been flagged — tipping off is a prohibited action regardless of confidence in the finding.",
+    "requires_controls": ["C001", "C002", "C010"],
+    "severity_floor": "blocker",
+    "source": "financial_aml_domain_pack"
+  },
+  "FIN-AML-002": {
+    "requirement_text": "AML agents must not autonomously finalize or file a Suspicious Activity Report narrative; SAR filing requires an explicit analyst approval gate, and the approval decision must be logged with actor, timestamp, case ID, and evidence hash.",
+    "requires_controls": ["C003", "C005", "C011"],
+    "severity_floor": "blocker",
+    "source": "financial_aml_domain_pack"
+  },
+  "FIN-AML-003": {
+    "requirement_text": "AML agents must correctly resolve the customer, account, and counterparty entities referenced by a case before acting or reporting on them; wrong entity/counterparty resolution must be caught before it reaches a case narrative or filing.",
+    "requires_controls": ["C004", "C008"],
+    "severity_floor": "high",
+    "source": "financial_aml_domain_pack"
+  },
+  "FIN-AML-004": {
+    "requirement_text": "AML agents that ground findings in KYC, sanctions, or adverse-media evidence must restrict retrieval to approved case-management and sanctions/adverse-media sources and validate that claims in the case narrative are grounded in current, case-linked evidence, not retrieved content alone.",
+    "requires_controls": ["C007", "C008"],
+    "severity_floor": "high",
+    "source": "financial_aml_domain_pack"
+  },
+  "FIN-AML-005": {
+    "requirement_text": "AML agents must not autonomously close an alert or case, or recommend client exit as a final action; these require an explicit human approval gate before the case-management record is mutated, logged with actor, timestamp, case ID, and evidence hash.",
+    "requires_controls": ["C003", "C005", "C011"],
+    "severity_floor": "blocker",
+    "source": "financial_aml_domain_pack"
+  }
+}

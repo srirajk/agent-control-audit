@@ -1,0 +1,140 @@
+{
+  "author_approved": true,
+  "requirements": {
+    "FIN-001": {
+      "requirement_text": "Agents that can move money, modify financial accounts, execute trades, submit financial forms, or trigger externally visible financial actions must enforce authorization, semantic argument validation, human approval, transaction limits, and audit logging before the action executes.",
+      "requires_controls": [
+        "C003",
+        "C004",
+        "C005",
+        "C006",
+        "C011"
+      ],
+      "severity_floor": "blocker",
+      "source": "author_policy"
+    },
+    "FIN-002": {
+      "requirement_text": "Agents that provide personalized financial recommendations, investment/trading guidance, credit/eligibility guidance, or customer-facing regulated financial communication must block unsupported requests and validate final output before release.",
+      "requires_controls": [
+        "C001",
+        "C002"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-003": {
+      "requirement_text": "Agents that process customer financial data must minimize data exposure, redact sensitive data in prompts/tools/logs/output, authorize data access, and preserve audit logs of access and disclosure decisions.",
+      "requires_controls": [
+        "C003",
+        "C009",
+        "C010",
+        "C011"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-004": {
+      "requirement_text": "Agents that answer financial questions from retrieved sources must restrict retrieval to approved sources and validate that material claims are grounded in current, relevant sources.",
+      "requires_controls": [
+        "C007",
+        "C008"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-005": {
+      "requirement_text": "Multi-agent financial workflows must constrain handoff destinations and authority, filter transferred context, and preserve handoff provenance.",
+      "requires_controls": [
+        "C012",
+        "C013",
+        "C014"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-006": {
+      "requirement_text": "Safety claims that depend on model behavior, datasets, or evaluation runs must pin versions and report variance or confidence instead of a single unsupported score.",
+      "requires_controls": [
+        "C016"
+      ],
+      "severity_floor": "medium",
+      "source": "author_policy"
+    },
+    "FIN-007": {
+      "requirement_text": "Financial agents exposed to users, tools, retrieval, webpages, files, MCP servers, or handoffs must prevent jailbreaks and prompt injection from bypassing financial controls, exfiltrating sensitive data, or escalating tool authority.",
+      "requires_controls": [
+        "C017"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-008": {
+      "requirement_text": "Customer-facing financial agents must block or safely handle toxic, abusive, harassing, hateful, threatening, sexual, self-harm, violent, or brand-damaging content in inputs and outputs without blocking legitimate financial risk discussion.",
+      "requires_controls": [
+        "C018"
+      ],
+      "severity_floor": "medium",
+      "source": "author_policy"
+    },
+    "FIN-009": {
+      "requirement_text": "Production-facing financial agents must bound cost and rate, fail safely under model/tool/data outages, and expose safety-relevant observability for incident response.",
+      "requires_controls": [
+        "C019",
+        "C020",
+        "C021"
+      ],
+      "severity_floor": "medium",
+      "source": "author_policy"
+    },
+    "FIN-010": {
+      "requirement_text": "High-risk financial agents must include regression evals for jailbreak, prompt injection, toxicity, sensitive-data leakage, unauthorized tool calls, grounding failures, financial-advice traps, and benign false positives, with release thresholds and hashable evidence.",
+      "requires_controls": [
+        "C022"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy"
+    },
+    "FIN-011": {
+      "requirement_text": "High-risk financial agents must be registered in a model/agent inventory with named business, technical, and model-risk owners; approved intended use; prohibited use; limitations; and periodic governance reporting.",
+      "requires_controls": [
+        "C023",
+        "C024",
+        "C036"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy_aligned_to_model_risk_governance"
+    },
+    "FIN-012": {
+      "requirement_text": "High-risk financial agents must have independent validation/effective challenge, ongoing drift and outcome monitoring, and benchmark or backtesting evidence for material safety or performance claims.",
+      "requires_controls": [
+        "C025",
+        "C027",
+        "C028"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy_aligned_to_model_risk_governance"
+    },
+    "FIN-013": {
+      "requirement_text": "Financial agents that use customer, transaction, retrieval, eligibility, prioritization, or decision-support data must document data lineage and quality, test for fairness/bias where outcomes can affect people or entities, and provide reason codes or explanations suitable for review.",
+      "requires_controls": [
+        "C026",
+        "C029",
+        "C030"
+      ],
+      "severity_floor": "high",
+      "source": "author_policy_aligned_to_model_risk_governance"
+    },
+    "FIN-014": {
+      "requirement_text": "Production-facing financial agents must govern changes, third-party/model-provider dependencies, privileged access and segregation of duties, evidence retention/legal hold, rollback, continuity, and decommissioning.",
+      "requires_controls": [
+        "C031",
+        "C032",
+        "C033",
+        "C034",
+        "C035"
+      ],
+      "severity_floor": "medium",
+      "source": "author_policy_aligned_to_model_risk_governance"
+    }
+  }
+}

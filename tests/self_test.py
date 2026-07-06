@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import inspect
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -12,9 +14,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = PROJECT_ROOT / "agent-control-audit"
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
+sys.path.insert(0, str(SKILL_DIR / "engine"))
 
 import dataset_import
 import eval_runner
+import schema_validate
 import static_audit
 
 
@@ -29,6 +33,19 @@ def assert_equal(actual: object, expected: object, label: str) -> None:
 
 
 def main() -> int:
+    # regimes/financial.json is the sole authoritative source static_audit.py loads at
+    # runtime; regimes/financial.md is documentation only. This check is one-way:
+    # every requirement documented in the markdown must exist in the JSON (catches
+    # "documented but not enforced" drift). The reverse is not required.
+    financial_md = (SKILL_DIR / "regimes" / "financial.md").read_text(encoding="utf-8")
+    documented_ids = set(re.findall(r"^### (FIN-\d+)", financial_md, re.MULTILINE))
+    json_ids = set(static_audit.REQUIREMENTS)
+    undocumented_in_json = documented_ids - json_ids
+    if undocumented_in_json:
+        raise AssertionError(
+            f"regimes/financial.md documents requirements missing from regimes/financial.json: {sorted(undocumented_in_json)}"
+        )
+
     fixture = FIXTURES_DIR / "financial_agent"
     result = static_audit.audit(fixture)
     assert_equal(result["framework"], "openai_agents_sdk", "fixture framework")
@@ -152,6 +169,88 @@ def main() -> int:
     }:
         if control_id not in adk_guarded_present:
             raise AssertionError(f"adk guarded fixture missing expected discovered control {control_id}")
+
+    control_ids = schema_validate.load_control_ids(SKILL_DIR / "engine" / "control_catalog.md")
+    financial_regime = json.loads((SKILL_DIR / "regimes" / "financial.json").read_text(encoding="utf-8"))
+    assert_equal(financial_regime.get("author_approved"), True, "financial.json author_approved flag")
+    if schema_validate.validate_regime_file(financial_regime["requirements"], control_ids, source_label="financial.json"):
+        raise AssertionError("regimes/financial.json requirements should be schema-valid")
+
+    # derive_required() hardcodes which requirement ids it applies — a requirement added to
+    # financial.json without a matching branch there would be schema-valid and never apply.
+    derive_required_source = inspect.getsource(static_audit.derive_required)
+    handled_ids = set(re.findall(r'requirements_catalog\["(FIN-\d+)"\]', derive_required_source))
+    unhandled_ids = set(financial_regime["requirements"]) - handled_ids
+    if unhandled_ids:
+        raise AssertionError(
+            f"regimes/financial.json has requirements with no derive_required() branch, so they can never apply: {sorted(unhandled_ids)}"
+        )
+
+    aml_overlay = json.loads(
+        (PROJECT_ROOT / "domain_extensions" / "financial_aml" / "regime_overlay.json").read_text(encoding="utf-8")
+    )
+    if schema_validate.validate_regime_file(aml_overlay, control_ids, source_label="financial_aml overlay"):
+        raise AssertionError("domain_extensions/financial_aml/regime_overlay.json should be schema-valid")
+
+    malformed_overlay = {"FIN-BAD-001": {"requirement_text": "x", "requires_controls": ["C999"], "severity_floor": "high", "source": "x"}}
+    malformed_errors = schema_validate.validate_regime_file(malformed_overlay, control_ids, source_label="malformed")
+    if not malformed_errors:
+        raise AssertionError("schema validator should reject a requirement referencing an unknown control_id")
+
+    with tempfile.TemporaryDirectory() as domain_temp_dir:
+        domain_root = Path(domain_temp_dir) / "domain_extensions" / "test_domain"
+        write(
+            domain_root / "regime_overlay.json",
+            json.dumps(
+                {
+                    "FIN-TEST-001": {
+                        "requirement_text": "Synthetic requirement for self-test coverage.",
+                        "requires_controls": ["C004", "C005"],
+                        "severity_floor": "high",
+                        "source": "self_test",
+                    }
+                }
+            ),
+        )
+        original_domain_dir = static_audit.DOMAIN_EXTENSIONS_DIR
+        static_audit.DOMAIN_EXTENSIONS_DIR = Path(domain_temp_dir) / "domain_extensions"
+        try:
+            domain_result = static_audit.audit(FIXTURES_DIR / "financial_agent_guarded", domain="test_domain")
+        finally:
+            static_audit.DOMAIN_EXTENSIONS_DIR = original_domain_dir
+        assert_equal(domain_result["domain"], "test_domain", "domain overlay run domain field")
+        assert_equal(domain_result["domain_overlay_loaded"], True, "domain overlay run overlay_loaded field")
+        if "FIN-TEST-001" not in domain_result["required_controls"]:
+            raise AssertionError("domain overlay requirement should be merged into required_controls")
+        no_domain_result = static_audit.audit(FIXTURES_DIR / "financial_agent_guarded")
+        if "FIN-TEST-001" in no_domain_result["required_controls"]:
+            raise AssertionError("domain overlay requirement should not appear when --domain is not passed")
+
+    with tempfile.TemporaryDirectory() as collision_temp_dir:
+        collision_root = Path(collision_temp_dir) / "domain_extensions" / "collision_domain"
+        write(
+            collision_root / "regime_overlay.json",
+            json.dumps(
+                {
+                    "FIN-001": {
+                        "requirement_text": "Attempts to shadow a base regime requirement.",
+                        "requires_controls": ["C005"],
+                        "severity_floor": "low",
+                        "source": "collision_test",
+                    }
+                }
+            ),
+        )
+        original_domain_dir = static_audit.DOMAIN_EXTENSIONS_DIR
+        static_audit.DOMAIN_EXTENSIONS_DIR = Path(collision_temp_dir) / "domain_extensions"
+        try:
+            try:
+                static_audit.load_domain_overlay("collision_domain")
+                raise AssertionError("overlay reusing a base regime id (FIN-001) should be rejected, not silently merged")
+            except ValueError:
+                pass
+        finally:
+            static_audit.DOMAIN_EXTENSIONS_DIR = original_domain_dir
 
     dataset_dir = SKILL_DIR / "evals" / "datasets"
     dataset_paths = sorted(dataset_dir.glob("*.jsonl"))

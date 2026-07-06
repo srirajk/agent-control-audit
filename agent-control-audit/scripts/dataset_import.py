@@ -35,6 +35,7 @@ HIGH_RISK_SEVERITIES = {"blocker", "high"}
 ALLOW_EXPECTED = {"allow", "answer", "answer_with_citations", "answer_with_citations_or_insufficient_evidence"}
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
+DOMAIN_EXTENSIONS_DIR = SKILL_DIR.parent / "domain_extensions"
 DEFAULT_QUALITY_PROFILE_PATH = SKILL_DIR / "evals" / "quality_profiles.json"
 DEFAULT_QUALITY_PROFILE = {
     "profile_id": "default",
@@ -126,6 +127,17 @@ def merge_profile(base: dict[str, Any], override: dict[str, Any]) -> dict[str, A
 
 
 def load_quality_profile(profile_name: str, profile_path: Path | None = None) -> dict[str, Any]:
+    """Load a quality profile by name. If `profile_path` is not given and
+    domain_extensions/<profile_name>/quality_profile.json exists, it is used
+    automatically — this auto-resolution lives here (not only in main()'s CLI
+    parsing) so every caller, including direct Python callers, gets the domain
+    pack's quality profile instead of silently falling back to the generic
+    bundled one in evals/quality_profiles.json."""
+    if profile_path is None:
+        domain_local_profile = DOMAIN_EXTENSIONS_DIR / profile_name / "quality_profile.json"
+        if domain_local_profile.exists():
+            profile_path = domain_local_profile
+
     profiles: dict[str, Any] = {}
     if DEFAULT_QUALITY_PROFILE_PATH.exists():
         loaded = json.loads(DEFAULT_QUALITY_PROFILE_PATH.read_text(encoding="utf-8"))
@@ -667,7 +679,8 @@ def main() -> int:
     parser.add_argument(
         "--quality-profile-file",
         type=Path,
-        help="Optional custom quality profile JSON file. Defaults to evals/quality_profiles.json.",
+        help="Optional custom quality profile JSON file. Defaults to evals/quality_profiles.json, or to "
+        "domain_extensions/<quality-profile>/quality_profile.json when that file exists and this flag is omitted.",
     )
     args = parser.parse_args()
 

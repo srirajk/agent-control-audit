@@ -34,16 +34,20 @@ Do not create a separate engine for each subdomain. Add applies-when logic, data
 
 ## Requirement Template
 
-```markdown
-### <DOMAIN>-<NNN> <Short Requirement Name>
+Domain-overlay requirements are machine-consumed, not just prose: they live in `domain_extensions/<domain>/regime_overlay.json`, in the same shape as the base `regimes/financial.json`, and `scripts/static_audit.py --domain <domain>` validates them with `engine/schema_validate.py` and merges them into that run's `required_controls` unconditionally once the domain is selected (an overlay requirement's applicability condition is the domain selection itself, unlike the base regime's harm-surface-driven `applies_when` logic in `derive_required()`). See `domain_extensions/_template/regime_overlay.json` for a starter file.
 
-- `requirement_id`: `<DOMAIN>-<NNN>`
-- `requirement_text`: <one or two sentences>
-- `applies_when`: <machine-checkable or reviewer-checkable trigger>
-- `requires_controls`: `C001`, `C002`
-- `severity_floor`: `medium|high|blocker`
-- `source`: `author_policy` or approved source identifier
+```json
+{
+  "<DOMAIN>-<NNN>": {
+    "requirement_text": "<one or two sentences: what must the agent do or refuse to do, and why>",
+    "requires_controls": ["C001", "C002"],
+    "severity_floor": "medium|high|blocker",
+    "source": "<your_domain>_domain_pack"
+  }
+}
 ```
+
+Every `requires_controls` entry must be a real control id from `engine/control_catalog.md`, or the schema validator rejects the file at load time.
 
 ## Dataset Pack Template
 
@@ -81,16 +85,19 @@ Static source evidence can be enough for early triage. Governance acceptance usu
 
 ## Adding A New Domain
 
-1. Create `regimes/<domain>.md` using the requirement template.
-2. Add domain-specific starter datasets under `evals/datasets/` only when they are synthetic and broadly reusable.
-3. Add or update a profile in `evals/quality_profiles.json` so dataset readiness checks match the domain.
-4. Update `engine/mapping.md` if the domain introduces new harm surfaces or applies-when rules.
-5. Update `scripts/static_audit.py` only for broadly reusable source patterns or when deterministic detection is needed.
-6. Update `output/report_template.md` only if the report needs a reusable section.
-7. Add a guarded fixture only when the domain needs acceptance testing.
-8. Run the repository's deterministic scanner/eval smoke tests and the skill quick validator.
+1. Copy `domain_extensions/_template/` to `domain_extensions/<domain>/` and fill in `domain_profile.md`, `business_expectations.md`, `data_mdm_expectations.md`, `governance_expectations.md`, and `golden_case_requirements.md`.
+2. Fill in `domain_extensions/<domain>/regime_overlay.json` using the requirement template above. Run `python3 -B tests/self_test.py` or call `engine/schema_validate.py` directly to confirm it validates before relying on it.
+3. Fill in `domain_extensions/<domain>/quality_profile.json` (see the Quality Profile Template below) so dataset readiness checks match the domain. Do not add it to the bundled `evals/quality_profiles.json` — that file is the generic financial baseline, not a place for domain-specific overlays. `scripts/dataset_import.py --quality-profile <domain>` auto-resolves `domain_extensions/<domain>/quality_profile.json` when it exists.
+4. Add domain-specific starter datasets under `evals/datasets/` only when they are synthetic and broadly reusable across domains; domain-specific golden cases belong under the run's `05_dataset/proposed/`, not the bundled skill datasets.
+5. Run `scripts/static_audit.py <target> --domain <domain>` and confirm `domain_overlay_loaded` is `true` and `required_controls` includes your new requirement ids. `engine/mapping.md`'s harm-surface-driven `applies_when` logic only needs updating if the domain requires a new *base* requirement that should apply regardless of which domain is selected — a domain-scoped requirement belongs in the overlay, not in `engine/mapping.md`.
+6. Update `scripts/static_audit.py`'s framework/control *discovery* logic only for broadly reusable source patterns or when deterministic detection is needed — this is separate from the requirement/overlay mechanism above.
+7. Update `output/report_template.md` only if the report needs a reusable section.
+8. Add a guarded fixture only when the domain needs acceptance testing.
+9. Run `python3 -B tests/self_test.py` and the repository's deterministic scanner/eval smoke tests before treating the domain pack as usable.
 
 ## Quality Profile Template
+
+Save this as `domain_extensions/<domain>/quality_profile.json`, not in the bundled `evals/quality_profiles.json`.
 
 ```json
 {
