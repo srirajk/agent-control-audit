@@ -1,0 +1,7 @@
+[project]
+name = "google-adk-aml-as-is"
+version = "0.1.0"
+dependencies = [
+  "google-adk",
+]
+

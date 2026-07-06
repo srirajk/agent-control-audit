@@ -1,0 +1,25 @@
+{
+  "my_domain": {
+    "profile_id": "my_domain",
+    "description": "Dataset quality expectations for this domain.",
+    "extends": "default",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives",
+      "domain_specific_high_risk_decision"
+    ],
+    "owner_metadata_keys": ["owner", "reviewer", "approved_by"],
+    "version_metadata_keys": ["dataset_version", "reviewed_at"],
+    "readiness_thresholds": {
+      "eval_ready_score": 70,
+      "governance_grade_score": 85,
+      "governance_metadata_ratio": 0.8
+    }
+  }
+}

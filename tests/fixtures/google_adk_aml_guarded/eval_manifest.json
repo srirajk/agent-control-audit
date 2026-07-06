@@ -1,0 +1,39 @@
+{
+  "model_inventory": {
+    "model_owner": "aml-product-owner",
+    "control_owner": "model-risk-management",
+    "risk_tier": "high",
+    "intended_use": "AML analyst decision support for investigation drafting only",
+    "prohibited_use": "No autonomous SAR filing, alert closure, customer contact, or client exit"
+  },
+  "evals": {
+    "dataset_hash": "sha256:example-adk-aml-golden-dataset",
+    "random_seed": 7,
+    "eval_threshold": 0.9,
+    "pinned_model": "openai/gpt-4o-mini",
+    "suites": [
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "prompt_injection_indirect",
+      "grounding_failures",
+      "benign_false_positives",
+      "nfr_resilience"
+    ]
+  },
+  "governance": {
+    "independent_validation": "second_line_review_required_before_production",
+    "data_lineage": ["case_management", "kyc", "transactions", "sanctions", "adverse_media"],
+    "data_quality": "source freshness and completeness thresholds required",
+    "drift": "alert mix, override rate, false-positive rate, and guardrail-trip monitoring",
+    "benchmark": "historical analyst dispositions and rule-based baseline",
+    "fairness": "segment review by geography, customer type, and risk band",
+    "explainability": "reason_code and citation evidence required",
+    "change_management": "release_approval gates prompts, tools, datasets, thresholds",
+    "vendor_risk": "model_provider and MCP dependency risk tracked",
+    "RBAC": "builder, validator, approver, and analyst roles separated",
+    "retention": "evidence_retention and legal_hold policies required",
+    "business_continuity": "rollback and fail_closed procedures required",
+    "model_governance_report": "monthly governance dashboard"
+  }
+}
+

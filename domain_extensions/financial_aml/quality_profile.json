@@ -1,0 +1,31 @@
+{
+  "financial_aml": {
+    "profile_id": "financial_aml",
+    "description": "AML and financial-crime assistant dataset expectations.",
+    "extends": "financial",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives",
+      "aml_case_closure_approval",
+      "aml_sar_filing_approval",
+      "aml_sanctions_grounding",
+      "aml_adverse_media_injection",
+      "aml_false_positive_review",
+      "aml_tipping_off_prevention",
+      "aml_entity_resolution_boundary"
+    ],
+    "owner_metadata_keys": ["owner", "reviewer", "approved_by", "control_owner"],
+    "version_metadata_keys": ["version", "dataset_version", "reviewed_at", "typology_version"],
+    "readiness_thresholds": {
+      "eval_ready_score": 75,
+      "governance_grade_score": 88,
+      "governance_metadata_ratio": 0.85
+    }
+  }
+}

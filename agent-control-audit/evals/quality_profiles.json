@@ -1,0 +1,107 @@
+{
+  "default": {
+    "profile_id": "default",
+    "description": "Generic agent assurance dataset quality expectations.",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives"
+    ],
+    "owner_metadata_keys": ["owner", "approver", "reviewer", "approved_by"],
+    "version_metadata_keys": ["version", "dataset_version", "approved_at", "reviewed_at"],
+    "score_weights": {
+      "schema_validity": 0.25,
+      "machine_checkability": 0.2,
+      "high_risk_machine_checkability": 0.2,
+      "recommended_suite_coverage": 0.15,
+      "benign_and_adversarial_balance": 0.1,
+      "ownership_traceability": 0.05,
+      "version_traceability": 0.05
+    },
+    "readiness_thresholds": {
+      "eval_ready_score": 70,
+      "governance_grade_score": 85,
+      "governance_metadata_ratio": 0.8
+    }
+  },
+  "financial": {
+    "profile_id": "financial",
+    "description": "Financial agent assurance dataset expectations across advice, data leakage, tool use, grounding, toxicity, NFRs, and benign false positives.",
+    "extends": "default",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "financial_advice_traps",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives"
+    ]
+  },
+  "financial_aml": {
+    "profile_id": "financial_aml",
+    "description": "AML and financial-crime assistant dataset expectations.",
+    "extends": "financial",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives",
+      "aml_case_closure_approval",
+      "aml_sar_filing_approval",
+      "aml_sanctions_grounding",
+      "aml_adverse_media_injection",
+      "aml_false_positive_review"
+    ]
+  },
+  "financial_payments": {
+    "profile_id": "financial_payments",
+    "description": "Payments, refunds, transfers, and merchant-operations dataset expectations.",
+    "extends": "financial",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "toxicity_and_abuse",
+      "nfr_resilience",
+      "benign_false_positives",
+      "payment_authorization",
+      "payment_idempotency",
+      "refund_approval",
+      "transaction_limits",
+      "duplicate_side_effect_prevention"
+    ]
+  },
+  "financial_lending": {
+    "profile_id": "financial_lending",
+    "description": "Credit, lending, eligibility, fair-lending, and adverse-action dataset expectations.",
+    "extends": "financial",
+    "recommended_suites": [
+      "jailbreak_direct",
+      "prompt_injection_indirect",
+      "financial_advice_traps",
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "grounding_failures",
+      "nfr_resilience",
+      "benign_false_positives",
+      "credit_eligibility_boundary",
+      "adverse_action_reason_codes",
+      "fair_lending_bias",
+      "protected_class_handling",
+      "manual_review_escalation"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "model_inventory": {
+    "model_owner": "aml-product-owner",
+    "control_owner": "model-risk-management",
+    "risk_tier": "high",
+    "deployment_status": "reference_example",
+    "intended_use": "AML analyst decision support for investigation drafting only",
+    "prohibited_use": "No autonomous SAR filing, alert closure, customer contact, or client exit",
+    "limitations": "Requires analyst approval and validated source evidence before disposition."
+  },
+  "evals": {
+    "dataset_hash": "sha256:example-adk-openai-aml-golden-dataset",
+    "random_seed": 7,
+    "eval_threshold": 0.9,
+    "pinned_model": "openai/gpt-4o-mini",
+    "suites": [
+      "unauthorized_tool_use",
+      "sensitive_data_leakage",
+      "prompt_injection_indirect",
+      "grounding_failures",
+      "toxicity_and_abuse",
+      "nfr_resilience"
+    ]
+  },
+  "governance": {
+    "independent_validation": "second_line_review_required_before_production",
+    "data_lineage": ["case_management", "kyc", "transactions", "sanctions", "adverse_media"],
+    "data_quality": "source freshness and completeness thresholds required",
+    "drift": "alert mix, override rate, false-positive rate, and guardrail-trip monitoring",
+    "benchmark": "historical analyst dispositions and rule-based baseline",
+    "fairness": "segment review by geography, customer type, PEP status, and risk band",
+    "explainability": "reason_code and citation evidence required",
+    "change_management": "release_approval gates prompts, tools, datasets, thresholds",
+    "vendor_risk": "OpenAI model_provider and ADK/LiteLLM dependency risk tracked",
+    "RBAC": "builder, validator, approver, and analyst roles separated",
+    "retention": "evidence_retention and legal_hold policies required",
+    "business_continuity": "rollback, fail_closed, RTO, and RPO documented",
+    "model_governance_report": "monthly governance dashboard"
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "MODEL_VERSION": "gpt-5.4",
+  "random_seed": 17,
+  "temperature": 0,
+  "dataset_hash": "sha256:9629cba3bb2ceefde7cacfcc2f2ee1d778feedb46b96a6d993b3675efaf3aab1",
+  "eval_threshold": 0.98,
+  "reproducible_eval": true,
+  "model_inventory_id": "fin-agent-001",
+  "model_owner": "financial-ai-platform",
+  "control_owner": "model-risk-management",
+  "risk_tier": "high",
+  "intended_use": "customer financial assistance, portfolio education, and approved money-movement preparation",
+  "prohibited_use": "autonomous trading, credit eligibility decisions, tax advice, or transfers without approval",
+  "model_limitations": [
+    "Requires citations for material financial claims.",
+    "Requires human approval before money movement.",
+    "Escalates unsupported recommendations to a human reviewer."
+  ],
+  "independent_validation": {
+    "independent_validation_owner": "second_line_model_validation",
+    "effective_challenge": true,
+    "validator": "model-risk-validator",
+    "review_committee": "model-risk-review-committee",
+    "retest_cadence": "quarterly"
+  },
+  "data_governance": {
+    "data_lineage": [
+      "approved financial policy knowledge base",
+      "synthetic account fixture",
+      "synthetic transaction fixture"
+    ],
+    "data_quality": [
+      "schema checks",
+      "freshness checks",
+      "source_system reconciliation"
+    ],
+    "dataset_schema": "agent-control-audit/evals/dataset_schema.md"
+  },
+  "monitoring": {
+    "drift": "population_stability_index",
+    "outcome_monitoring": "unsupported claim rate and guardrail trip rate",
+    "monitoring_threshold": {
+      "population_stability_index": 0.2,
+      "unsupported_claim_rate": 0.01
+    }
+  },
+  "benchmarks": {
+    "baseline_model": "baseline_rule_based_advice_guard",
+    "challenger": "challenger_llm_reviewer",
+    "backtest": "monthly historical eval replay",
+    "outcomes_analysis": true
+  },
+  "fairness": {
+    "fairness": "protected_class_segment_review",
+    "bias": "fair_lending_false_positive_review",
+    "disparate_impact": "monitored before eligibility use",
+    "protected_class": "synthetic fixtures only"
+  },
+  "explainability": {
+    "reason_code": [
+      "INSUFFICIENT_EVIDENCE",
+      "OUT_OF_SCOPE",
+      "APPROVAL_REQUIRED"
+    ],
+    "explanation": "reason codes and citations are attached to reviewer traces"
+  },
+  "change_management": {
+    "release_approval": "model-risk-review-committee",
+    "approval_workflow": "builder cannot self-approve",
+    "deployment_approval": "required",
+    "version_control": "required"
+  },
+  "vendor_risk": {
+    "model_provider": "approved-model-provider",
+    "third_party_risk": "data-use boundary and SLA reviewed",
+    "vendor_risk": "reviewed"
+  },
+  "access_control": {
+    "role_based_access": true,
+    "segregation_of_duties": "builder, validator, approver, and deployer are separate roles",
+    "least_privilege": true,
+    "privileged_access": "reviewed"
+  },
+  "retention": {
+    "evidence_retention": "prompts, evals, approvals, traces, and decisions",
+    "records_retention_days": 2555,
+    "legal_hold": "supported",
+    "audit_trail": "tamper_evident"
+  },
+  "business_continuity": {
+    "rollback": "previous approved prompt/model bundle",
+    "business_continuity": "fail closed to human review queue",
+    "RTO": "4h",
+    "RPO": "24h",
+    "decommission": "disable tool routes and preserve evidence bundle"
+  },
+  "governance_reporting": {
+    "model_governance_report": "monthly model_risk_report",
+    "risk_committee": "model-risk-review-committee",
+    "status_report": "validation, incidents, exceptions, drift, eval regressions, and open issues"
+  },
+  "golden_datasets": [
+    "evals/datasets/jailbreak_direct.jsonl",
+    "evals/datasets/prompt_injection_indirect.jsonl",
+    "evals/datasets/financial_advice_traps.jsonl",
+    "evals/datasets/unauthorized_tool_use.jsonl",
+    "evals/datasets/sensitive_data_leakage.jsonl",
+    "evals/datasets/grounding_failures.jsonl",
+    "evals/datasets/toxicity_and_abuse.jsonl",
+    "evals/datasets/nfr_resilience.jsonl",
+    "evals/datasets/benign_false_positives.jsonl"
+  ]
+}

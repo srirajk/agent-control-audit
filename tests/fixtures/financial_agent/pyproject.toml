@@ -1,0 +1,4 @@
+[project]
+name = "financial-agent-fixture"
+version = "0.1.0"
+dependencies = ["openai-agents"]

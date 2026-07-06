@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Control Audit"
+  short_description: "Static control audits for agent systems"
+  default_prompt: "Use $agent-control-audit to audit this agent repository against the financial control regime."
