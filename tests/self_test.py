@@ -18,6 +18,9 @@ sys.path.insert(0, str(SKILL_DIR / "engine"))
 
 import dataset_import
 import eval_runner
+import judge_handoff_export
+import judge_result_import
+import judge_rubric
 import schema_validate
 import static_audit
 
@@ -262,6 +265,111 @@ def main() -> int:
     summary = eval_runner.summarize(grades, eval_runner.canonical_hash(cases))
     if summary["failed"]:
         raise AssertionError(f"sample eval results should pass, failed={summary['failed_ids']}")
+
+    aml_dataset_path = SKILL_DIR / "evals" / "datasets" / "aml_investigation_controls.jsonl"
+    aml_cases = eval_runner.load_cases([aml_dataset_path])
+    aml_results_path = PROJECT_ROOT / "tests" / "results" / "sample_results.jsonl"
+    with tempfile.TemporaryDirectory() as judge_temp_dir:
+        judge_out_dir = Path(judge_temp_dir) / "judge_handoff"
+        aml_results = eval_runner.load_results(aml_results_path)
+        pack_summary = judge_handoff_export.render_pack(aml_cases, aml_results, judge_out_dir)
+        assert_equal(pack_summary["cases"], len(aml_cases), "judge handoff pack case count")
+        assert_equal(pack_summary["missing_result_cases"], 0, "judge handoff pack missing-result count")
+        for filename in pack_summary["files"]:
+            if not (judge_out_dir / filename).exists():
+                raise AssertionError(f"judge handoff pack missing expected file {filename}")
+
+        # the rubric written into the pack must be the exact rubric a live DeepEval run would use
+        rubric_text = (judge_out_dir / "judge_rubric.md").read_text(encoding="utf-8")
+        if judge_rubric.CRITERIA not in rubric_text:
+            raise AssertionError("judge_rubric.md does not contain the shared judge_rubric.CRITERIA text")
+
+        # a reviewer must see structured runtime evidence, not just free text, to judge
+        # approval-gate and forbidden-tool-use behavior reliably
+        judge_case_rows = [json.loads(line) for line in (judge_out_dir / "judge_cases.jsonl").read_text(encoding="utf-8").splitlines()]
+        required_judge_case_fields = {
+            "hard_gate_passed",
+            "hard_gate_failures",
+            "structured_failures",
+            "text_fallback_failures",
+            "assertion_limitations",
+            "blocked",
+            "approval_requested",
+            "tool_calls",
+            "citations",
+        }
+        for row in judge_case_rows:
+            missing_fields = required_judge_case_fields - set(row)
+            if missing_fields:
+                raise AssertionError(f"judge_cases.jsonl row {row.get('case_id')} missing structured fields: {sorted(missing_fields)}")
+
+        template = json.loads((judge_out_dir / "judge_result_template.json").read_text(encoding="utf-8"))
+        filled = []
+        for row in template:
+            filled.append(
+                {
+                    "case_id": row["case_id"],
+                    "score": 0.9,
+                    "passed": True,
+                    "judge_model_used": "test-judge-model",
+                    "run_date": "2026-07-06",
+                    "rationale": "Meets criteria.",
+                }
+            )
+        # deliberately introduce the two data-quality problems judge_result_import.py must catch
+        filled[0]["score"] = 0.4
+        filled[0]["passed"] = True  # inconsistent with recomputed passed=False at default threshold
+        filled[1]["judge_model_used"] = None
+        judge_result_path = judge_out_dir / "judge_result.json"
+        judge_result_path.write_text(json.dumps(filled, indent=2), encoding="utf-8")
+
+        judge_results = judge_result_import.load_judge_results(judge_result_path)
+        judge_summary = judge_result_import.evaluate_judge_results(aml_cases, judge_results, judge_rubric.DEFAULT_THRESHOLD)
+        assert_equal(judge_summary["evidence_type"], "llm_judge_score", "judge summary evidence type")
+        assert_equal(judge_summary["total_cases"], len(aml_cases), "judge summary total cases")
+        assert_equal(judge_summary["cases_with_data_quality_issues"], 2, "judge summary data quality issue count")
+        first_case_issues = judge_summary["cases"][0]["data_quality_issues"]
+        if not any("disagrees with recomputed" in issue for issue in first_case_issues):
+            raise AssertionError("judge_result_import should flag inconsistent client-supplied passed vs. recomputed passed")
+        second_case_issues = judge_summary["cases"][1]["data_quality_issues"]
+        if not any("judge_model_used is missing" in issue for issue in second_case_issues):
+            raise AssertionError("judge_result_import should flag a missing judge_model_used")
+        if judge_summary["cases"][0]["passed"] is not False:
+            raise AssertionError("judge_result_import should recompute passed from score, not trust the client-supplied value")
+
+        # a domain overlay must actually change the rendered rubric, and both generator
+        # paths (handoff pack and live DeepEval) must combine it identically
+        aml_domain_dir = judge_out_dir / "aml_domain"
+        judge_handoff_export.render_pack(aml_cases, aml_results, aml_domain_dir, domain="financial_aml")
+        aml_rubric_text = (aml_domain_dir / "judge_rubric.md").read_text(encoding="utf-8")
+        if "Tipping-off" not in aml_rubric_text or "SAR filing" not in aml_rubric_text.replace("SAR filing / case closure", "SAR filing"):
+            raise AssertionError("domain-scoped judge_rubric.md should include the financial_aml overlay's AML-specific dimensions")
+        assert_equal(
+            judge_rubric.combined_criteria("financial_aml"),
+            judge_rubric.CRITERIA + "\n\nAdditional domain-specific dimensions for financial_aml:\n\n"
+            + (PROJECT_ROOT / "domain_extensions" / "financial_aml" / "judge_rubric_overlay.md").read_text(encoding="utf-8").strip(),
+            "combined_criteria for financial_aml",
+        )
+
+        # unexpected case_ids in a returned result must be flagged, and a complete
+        # mismatch (wrong file uploaded) must fail loud rather than silently score zero cases
+        partial_mismatch_results = dict(judge_results)
+        partial_mismatch_results["not-a-real-case-id"] = {
+            "score": 0.9,
+            "passed": True,
+            "judge_model_used": "test-judge-model",
+            "run_date": "2026-07-06",
+        }
+        mismatch_summary = judge_result_import.evaluate_judge_results(aml_cases, partial_mismatch_results, judge_rubric.DEFAULT_THRESHOLD)
+        assert_equal(mismatch_summary["unexpected_case_ids"], ["not-a-real-case-id"], "unexpected case_id detection")
+
+        try:
+            judge_result_import.evaluate_judge_results(
+                aml_cases, {"totally-unrelated-id": {"score": 0.5}}, judge_rubric.DEFAULT_THRESHOLD
+            )
+            raise AssertionError("judge_result_import should reject a result file with zero matching case ids")
+        except ValueError:
+            pass
 
     guarantee_case = {
         "id": "guarantee-negated",
